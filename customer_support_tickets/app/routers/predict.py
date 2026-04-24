@@ -25,7 +25,7 @@ def predict_ticket_priority(request: PredictRequest):
     ml_prediction = MlPrediction(
         priority=predict_priority(request.message),
         model_accuracy_percent=get_model_accuracy_percent(),
-        accuracy_basis="Offline accuracy metric from the trained ML model.",
+        accuracy_basis="accuracy metric from the trained ML model.",
     )
 
     llm_start = perf_counter()

@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.config import settings
+from app.services.ml_compat import register_pickle_compat_classes
 
 
 @lru_cache(maxsize=1)
@@ -17,6 +18,7 @@ def _load_model():
     if not model_path.exists():
         raise FileNotFoundError(f"ML model file not found: {model_path}")
 
+    register_pickle_compat_classes()
     model_package = joblib.load(model_path)
     if not isinstance(model_package, dict) or "pipeline" not in model_package:
         raise ValueError("Saved ML model file must contain a model package with a 'pipeline' key.")

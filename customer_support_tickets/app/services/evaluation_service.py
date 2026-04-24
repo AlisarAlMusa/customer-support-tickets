@@ -66,7 +66,7 @@ def evaluate_answer_pair_with_llm_metrics(
         summary=summary,
     )
 
-
+# RAG vs non RAG analysis
 def _hardcoded_evaluation_summary(
     confidence: MetricComparison,
     llm_latency_ms: float,
