@@ -1,0 +1,20 @@
+# backend
+customer_support_tickets/.venv/
+customer_support_tickets/*.csv
+customer_support_tickets/rag/chroma_db/
+customer_support_tickets/.env
+
+# frontend
+customer_support_frontend/**/node_modules/
+customer_support_frontend/**/dist/
+customer_support_frontend/**/dist-ssr/
+customer_support_frontend/**/*.local
+
+# global
+.env
+__pycache__/
+.DS_Store
+*.log
+.idea/
+.vscode/*
+!.vscode/extensions.json
