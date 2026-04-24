@@ -1,7 +1,7 @@
 export type UnknownRecord = Record<string, unknown>;
 
 export interface TicketQueryPayload {
-  query: string;
+  message: string;
 }
 
 export interface SourceTicket {

@@ -13,7 +13,7 @@ const EXAMPLE_QUERY =
 
 function formatConfidence(value: number | string | undefined) {
   if (typeof value === "number") {
-    return `${Math.round(value * 100)}%`;
+    return `${Math.round(value)}%`;
   }
 
   return value ? String(value) : "N/A";

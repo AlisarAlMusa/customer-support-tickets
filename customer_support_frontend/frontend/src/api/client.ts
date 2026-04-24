@@ -94,13 +94,12 @@ function normalizeCost(record: UnknownRecord | undefined, keys: string[]) {
 }
 
 function buildTicketPayload(query: string): TicketQueryPayload {
-  return { query };
-  // If your FastAPI backend expects a different request field such as `text`
-  // or `ticket`, update the payload shape here in one place.
+  return { message: query };
 }
 
 function normalizeSourceTicket(item: unknown, index: number): SourceTicket {
   const record = asRecord(item);
+  const metadata = asRecord(record ? pickValue(record, ["metadata"]) : undefined);
 
   return {
     id: pickOptionalString(record, ["id", "_id"]) || `source-${index}`,
@@ -112,32 +111,44 @@ function normalizeSourceTicket(item: unknown, index: number): SourceTicket {
       "text",
       "content",
     ]),
-    companyResponse: pickOptionalString(record, [
-      "company_response",
-      "companyResponse",
-      "response",
-      "answer",
-      "resolution",
-    ]),
-    company: pickOptionalString(record, ["company", "brand", "organization"]),
-    source: pickOptionalString(record, ["source", "dataset", "origin"]),
+    companyResponse:
+      pickOptionalString(record, [
+        "response_text",
+        "company_response",
+        "companyResponse",
+        "response",
+        "answer",
+        "resolution",
+      ]) ??
+      pickOptionalString(metadata, ["response_text", "company_response", "response", "answer"]),
+    company:
+      pickOptionalString(record, ["company", "brand", "organization"]) ??
+      pickOptionalString(metadata, ["company", "brand", "organization"]),
+    source:
+      pickOptionalString(record, ["source", "dataset", "origin"]) ??
+      pickOptionalString(metadata, ["source", "dataset", "origin"]),
     similarityScore: pickOptionalNumber(record, [
       "similarity_score",
       "similarityScore",
       "score",
       "distance",
     ]),
-    createdAt: pickOptionalString(record, ["created_at", "createdAt", "date"]),
+    createdAt:
+      pickOptionalString(record, ["created_at", "createdAt", "date"]) ??
+      pickOptionalString(metadata, ["created_at", "createdAt", "date"]),
     raw: record,
   };
 }
 
 function normalizeAnswerResponse(raw: unknown, latencyMs: number): AnswerResponseNormalized {
   const record = asRecord(raw);
+  const evaluationNode = asRecord(record ? pickValue(record, ["evaluation"]) : undefined);
   const ragNode =
-    asRecord(pickValue(record, ["rag", "rag_result", "ragAnswer"])) || record;
+    asRecord(pickValue(record, ["rag_answer", "rag", "rag_result", "ragAnswer"])) || record;
   const nonRagNode =
-    asRecord(pickValue(record, ["non_rag", "nonRag", "base", "non_rag_result"])) || record;
+    asRecord(
+      pickValue(record, ["plain_llm_answer", "non_rag", "nonRag", "base", "non_rag_result"]),
+    ) || record;
   const sourcesNode =
     asArray(
       pickValue(record, [
@@ -151,27 +162,29 @@ function normalizeAnswerResponse(raw: unknown, latencyMs: number): AnswerRespons
 
   return {
     rag: {
-      answer: pickString(ragNode, ["answer", "rag_answer", "response"], "No RAG answer returned."),
-      analysis: pickOptionalString(ragNode, ["analysis", "reasoning", "explanation"]),
+      answer: pickString(ragNode, ["text", "answer", "rag_answer", "response"], "No RAG answer returned."),
+      analysis:
+        pickOptionalString(evaluationNode, ["summary"]) ??
+        pickOptionalString(ragNode, ["confidence_basis", "analysis", "reasoning", "explanation"]),
       confidence:
-        pickOptionalNumber(ragNode, ["confidence", "accuracy", "score"]) ??
-        pickOptionalString(ragNode, ["confidence", "accuracy"]),
-      cost: normalizeCost(ragNode, ["cost", "token_cost", "price"]),
+        pickOptionalNumber(ragNode, ["confidence_percent", "confidence", "accuracy", "score"]) ??
+        pickOptionalString(ragNode, ["confidence_basis", "confidence", "accuracy"]),
+      cost: "N/A",
       latencyMs,
       raw: ragNode,
     },
     nonRag: {
       answer: pickString(
         nonRagNode,
-        ["answer", "non_rag_answer", "nonrag_answer", "response", "base_answer"],
+        ["text", "answer", "non_rag_answer", "nonrag_answer", "response", "base_answer"],
         "No non-RAG answer returned.",
       ),
-      analysis: pickOptionalString(nonRagNode, ["analysis", "reasoning", "explanation"]),
+      analysis: pickOptionalString(nonRagNode, ["confidence_basis", "analysis", "reasoning", "explanation"]),
       confidence:
-        pickOptionalNumber(nonRagNode, ["confidence", "accuracy", "score"]) ??
-        pickOptionalString(nonRagNode, ["confidence", "accuracy"]),
-      cost: normalizeCost(nonRagNode, ["cost", "token_cost", "price"]),
-      latencyMs,
+        pickOptionalNumber(nonRagNode, ["confidence_percent", "confidence", "accuracy", "score"]) ??
+        pickOptionalString(nonRagNode, ["confidence_basis", "confidence", "accuracy"]),
+      cost: normalizeCost(evaluationNode, ["llm_estimated_cost_usd"]),
+      latencyMs: pickOptionalNumber(evaluationNode, ["llm_latency_ms"]) ?? latencyMs,
       raw: nonRagNode,
     },
     sources: sourcesNode.map(normalizeSourceTicket),
@@ -190,10 +203,17 @@ function normalizePredictionNode(
     label: pickString(node, labelKeys, fallbackLabel),
     analysis: pickOptionalString(node, analysisKeys),
     confidence:
-      pickOptionalNumber(node, ["confidence", "accuracy", "probability", "score"]) ??
-      pickOptionalString(node, ["confidence", "accuracy"]),
-    cost: normalizeCost(node, ["cost", "token_cost", "price"]),
-    latencyMs,
+      pickOptionalNumber(node, [
+        "confidence_percent",
+        "model_accuracy_percent",
+        "confidence",
+        "accuracy",
+        "probability",
+        "score",
+      ]) ??
+      pickOptionalString(node, ["confidence_basis", "accuracy_basis", "confidence", "accuracy"]),
+    cost: normalizeCost(node, ["estimated_cost_usd", "cost", "token_cost", "price"]),
+    latencyMs: pickOptionalNumber(node, ["latency_ms", "latencyMs"]) ?? latencyMs,
     raw: node,
   };
 }
@@ -208,14 +228,14 @@ function normalizePredictResponse(raw: unknown, latencyMs: number): PredictRespo
     ml: normalizePredictionNode(
       mlNode,
       ["prediction", "label", "priority", "class", "ml_prediction"],
-      ["analysis", "reasoning", "explanation", "ml_analysis"],
+      ["accuracy_basis", "analysis", "reasoning", "explanation", "ml_analysis"],
       latencyMs,
       "No ML prediction returned.",
     ),
     llm: normalizePredictionNode(
       llmNode,
       ["prediction", "label", "priority", "class", "llm_prediction"],
-      ["analysis", "reasoning", "explanation", "llm_analysis"],
+      ["confidence_basis", "analysis", "reasoning", "explanation", "llm_analysis"],
       latencyMs,
       "No LLM prediction returned.",
     ),
@@ -242,10 +262,22 @@ export async function analyzeTicket(query: string): Promise<AnalyzeTicketResult>
     return { answer, predict };
   } catch (error) {
     if (error instanceof AxiosError) {
-      const apiMessage =
-        asRecord(error.response?.data)?.detail ??
-        asRecord(error.response?.data)?.message ??
-        error.message;
+      const responseData = asRecord(error.response?.data);
+      const detail = responseData?.detail;
+      const apiMessage = Array.isArray(detail)
+        ? detail
+            .map((item) => {
+              const entry = asRecord(item);
+              const path = asArray(entry?.loc).join(".");
+              const message = typeof entry?.msg === "string" ? entry.msg : "Validation error";
+              return path ? `${path}: ${message}` : message;
+            })
+            .join(" | ")
+        : typeof detail === "string"
+          ? detail
+          : typeof responseData?.message === "string"
+            ? responseData.message
+            : error.message;
 
       throw new Error(String(apiMessage), { cause: error });
     }
