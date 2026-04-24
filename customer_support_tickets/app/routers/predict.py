@@ -2,6 +2,7 @@ from time import perf_counter
 
 from fastapi import APIRouter
 
+from app.logging_setup import log_audit_event
 from app.schemas.schema_predict import (
     LlmPrediction,
     MlPrediction,
@@ -22,6 +23,8 @@ router = APIRouter(prefix="/predict", tags=["predict"])
 
 @router.post("/", response_model=PredictResponse)
 def predict_ticket_priority(request: PredictRequest):
+    log_audit_event("predict_requested", query=request.message)
+
     ml_prediction = MlPrediction(
         priority=predict_priority(request.message),
         model_accuracy_percent=get_model_accuracy_percent(),
@@ -46,7 +49,7 @@ def predict_ticket_priority(request: PredictRequest):
         estimated_cost_usd=llm_estimated_cost_usd,
     )
 
-    return PredictResponse(
+    response = PredictResponse(
         message=request.message,
         ml_prediction=ml_prediction,
         llm_prediction=llm_prediction,
@@ -57,3 +60,11 @@ def predict_ticket_priority(request: PredictRequest):
             llm_cost_usd=llm_prediction.estimated_cost_usd,
         ),
     )
+    log_audit_event(
+        "predict_completed",
+        query=request.message,
+        ml_prediction=response.ml_prediction.model_dump(),
+        llm_prediction=response.llm_prediction.model_dump(),
+        evaluation=response.evaluation.model_dump(),
+    )
+    return response

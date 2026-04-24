@@ -36,8 +36,10 @@ def generate_rag_grounded_answer(message: str, retrieved_context: str) -> str:
     prompt = (
         "You are a customer support assistant. Use the retrieved support examples "
         "to answer the user's message. Be concise, actionable, and grounded in the "
-        "retrieved context. If the context is very weak (more than 0.8 distance)" 
-        "say it honestly and transparently: We are not sure of the answer.\n\nRetrieved context:\n"
+        "retrieved context. The retrieval quality has already been checked before this step, "
+        "so focus on giving the best grounded answer you can from the provided examples. "
+        "If the examples do not fully solve the issue, say what they suggest and be transparent "
+        "about the limit.\n\nRetrieved context:\n"
         f"{retrieved_context}"
     )
     return _generate_completion(prompt=prompt, user_message=message)

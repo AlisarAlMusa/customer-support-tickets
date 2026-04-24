@@ -86,6 +86,25 @@ http://localhost:5173
 - `GET /validate/embedder`
 - `POST /validate/retrieve`
 
+## Logging
+
+The backend writes logs under:
+
+```text
+customer_support_tickets/logs/
+```
+
+Files:
+- `app.log`: general application logs
+- `query_events.log`: structured logs for queries, retrievals, predictions, and generated outputs
+
+To inspect query activity while the backend is running:
+
+```bash
+cd customer_support_tickets
+tail -f logs/query_events.log
+```
+
 ## Notes
 
 - Chroma persistence is stored locally under `customer_support_tickets/rag/chroma_db/`

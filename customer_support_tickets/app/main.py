@@ -1,12 +1,11 @@
-import logging
-
 from fastapi import FastAPI
 
+from app.logging_setup import setup_logging
 from app.routers import answer, ingest, predict, validate
 from fastapi.middleware.cors import CORSMiddleware
 
 
-logging.basicConfig(level=logging.INFO)
+setup_logging()
 
 
 app = FastAPI(title="Customer Support Tickets API")

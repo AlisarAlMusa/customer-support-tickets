@@ -19,7 +19,10 @@ def get_chroma_client():
 def get_or_create_collection(name: str | None = None):
     client = get_chroma_client()
     collection_name = name or settings.chroma_collection_name
-    return client.get_or_create_collection(name=collection_name)
+    return client.get_or_create_collection(
+        name=collection_name,
+        metadata={"hnsw:space": "cosine"},
+    )
 
 
 def get_existing_ids(ids: list[str], collection_name: str | None = None) -> set[str]:

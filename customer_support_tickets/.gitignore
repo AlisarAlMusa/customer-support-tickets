@@ -3,7 +3,9 @@ __pycache__/
 *.pyc
 rag/chroma_db/
 .venv/
+logs/*.log
+!logs/.gitkeep
+input_output_log.txt
 
 twitter data/
 *.csv
-

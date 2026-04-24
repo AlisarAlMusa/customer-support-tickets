@@ -2,6 +2,7 @@ from time import perf_counter
 
 from fastapi import APIRouter
 
+from app.logging_setup import log_audit_event
 from app.schemas.schema_answer import AnswerRequest, AnswerResponse, GeneratedAnswer
 from app.services.evaluation_service import (
     calculate_rag_confidence_percent,
@@ -19,6 +20,12 @@ router = APIRouter(prefix="/answer", tags=["answer"])
 
 @router.post("/", response_model=AnswerResponse)
 def answer_ticket(request: AnswerRequest):
+    log_audit_event(
+        "answer_requested",
+        query=request.message,
+        top_k=request.top_k,
+    )
+
     retrieved_tickets = retrieve_similar_tickets(request.message, top_k=request.top_k)
     rag_answer_text = generate_rag_answer(request.message, retrieved_tickets)
 
@@ -45,7 +52,7 @@ def answer_ticket(request: AnswerRequest):
     )
     confidence = evaluate_confidence(rag_answer, plain_answer)
 
-    return AnswerResponse(
+    response = AnswerResponse(
         message=request.message,
         rag_answer=rag_answer,
         plain_llm_answer=plain_answer,
@@ -57,3 +64,14 @@ def answer_ticket(request: AnswerRequest):
             llm_estimated_cost_usd=llm_estimated_cost_usd,
         ),
     )
+    log_audit_event(
+        "answer_completed",
+        query=request.message,
+        top_k=request.top_k,
+        rag_answer=response.rag_answer.model_dump(),
+        plain_llm_answer=response.plain_llm_answer.model_dump(),
+        retrieved_count=len(response.retrieved_sources),
+        retrieved_sources=[ticket.model_dump() for ticket in response.retrieved_sources],
+        evaluation=response.evaluation.model_dump(),
+    )
+    return response

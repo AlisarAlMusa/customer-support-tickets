@@ -18,3 +18,5 @@ __pycache__/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+input_output_log.txt
