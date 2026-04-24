@@ -2,6 +2,15 @@ from app.schemas.schema_answer import EvaluationInfo, GeneratedAnswer, MetricCom
 from app.schemas.schema_predict import PredictEvaluation
 from app.schemas.schema_retrieve import RetrievedTicket
 
+HIGH_CONFIDENCE_DISTANCE = 0.1
+MEDIUM_CONFIDENCE_DISTANCE = 0.6
+LOW_CONFIDENCE_DISTANCE = 0.9
+HIGH_CONFIDENCE_PERCENT = 90.0
+MEDIUM_CONFIDENCE_PERCENT = 60.0
+LOW_CONFIDENCE_PERCENT = 40.0
+MIN_CONFIDENCE_DISTANCE = 1.0
+MIN_CONFIDENCE_PERCENT = 30.0
+
 
 def evaluate_confidence(rag_answer: GeneratedAnswer, plain_answer: GeneratedAnswer) -> MetricComparison:
     preferred_answer = "rag" if rag_answer.confidence_percent >= plain_answer.confidence_percent else "plain_llm"
@@ -19,10 +28,55 @@ def calculate_rag_confidence_percent(retrieved_tickets: list[RetrievedTicket]) -
     if not retrieved_tickets:
         return 0.0
 
-    top_score = retrieved_tickets[0].score
-    avg_score = sum(ticket.score for ticket in retrieved_tickets) / len(retrieved_tickets)
-    confidence = (0.7 * top_score + 0.3 * avg_score) * 100
-    return round(min(95.0, max(0.0, confidence)), 1)
+    top_distance = _ticket_distance(retrieved_tickets[0])
+    avg_distance = sum(_ticket_distance(ticket) for ticket in retrieved_tickets) / len(retrieved_tickets)
+    weighted_distance = (0.7 * top_distance) + (0.3 * avg_distance)
+    return distance_to_confidence(weighted_distance)
+
+
+def distance_to_confidence(distance: float) -> float:
+    clamped_distance = max(0.0, distance)
+
+    if clamped_distance <= HIGH_CONFIDENCE_DISTANCE:
+        return HIGH_CONFIDENCE_PERCENT
+
+    if clamped_distance <= MEDIUM_CONFIDENCE_DISTANCE:
+        slope = (
+            (MEDIUM_CONFIDENCE_PERCENT - HIGH_CONFIDENCE_PERCENT)
+            / (MEDIUM_CONFIDENCE_DISTANCE - HIGH_CONFIDENCE_DISTANCE)
+        )
+        confidence = HIGH_CONFIDENCE_PERCENT + (
+            (clamped_distance - HIGH_CONFIDENCE_DISTANCE) * slope
+        )
+        return round(max(0.0, min(100.0, confidence)), 1)
+
+    if clamped_distance <= LOW_CONFIDENCE_DISTANCE:
+        slope = (
+            (LOW_CONFIDENCE_PERCENT - MEDIUM_CONFIDENCE_PERCENT)
+            / (LOW_CONFIDENCE_DISTANCE - MEDIUM_CONFIDENCE_DISTANCE)
+        )
+        confidence = MEDIUM_CONFIDENCE_PERCENT + (
+            (clamped_distance - MEDIUM_CONFIDENCE_DISTANCE) * slope
+        )
+        return round(max(0.0, min(100.0, confidence)), 1)
+
+    if clamped_distance >= MIN_CONFIDENCE_DISTANCE:
+        return MIN_CONFIDENCE_PERCENT
+
+    slope = (
+        (MIN_CONFIDENCE_PERCENT - LOW_CONFIDENCE_PERCENT)
+        / (MIN_CONFIDENCE_DISTANCE - LOW_CONFIDENCE_DISTANCE)
+    )
+    confidence = LOW_CONFIDENCE_PERCENT + (
+        (clamped_distance - LOW_CONFIDENCE_DISTANCE) * slope
+    )
+    return round(max(0.0, min(100.0, confidence)), 1)
+
+
+def _ticket_distance(ticket: RetrievedTicket) -> float:
+    if ticket.distance is not None:
+        return ticket.distance
+    return max(0.0, 1.0 - ticket.score)
 
 
 def estimate_llm_tokens(*texts: str) -> int:

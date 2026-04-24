@@ -75,3 +75,12 @@ def answer_ticket(request: AnswerRequest):
         evaluation=response.evaluation.model_dump(),
     )
     return response
+
+
+# | similarity | interpretation | confidence (human) |
+# | ---------- | -------------- | ------------------ |
+# | < 0.2      | weak           | 10–30%             |
+# | 0.2–0.35   | usable         | **40–55%**         |
+# | 0.35–0.5   | good           | 60–80%             |
+# | > 0.5      | strong         | 80–95%             |
+

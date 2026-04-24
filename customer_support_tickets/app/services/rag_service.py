@@ -5,7 +5,7 @@ from app.schemas.schema_retrieve import RetrievedTicket
 from rag.embedder import embed_query
 from rag.store import get_or_create_collection
 
-WEAK_RETRIEVAL_THRESHOLD = 0.45
+WEAK_RETRIEVAL_DISTANCE_THRESHOLD = 0.85
 
 
 def retrieve_similar_tickets(query: str, top_k: int = 5) -> list[RetrievedTicket]:
@@ -36,10 +36,12 @@ def retrieve_similar_tickets(query: str, top_k: int = 5) -> list[RetrievedTicket
     tickets: list[RetrievedTicket] = []
     for document, metadata, distance in zip(documents, metadatas, distances):
         metadata = metadata or {}
+        normalized_distance = _normalize_distance(distance)
         tickets.append(
             RetrievedTicket(
                 text=document or "",
-                score=_distance_to_score(distance),
+                score=_distance_to_score(normalized_distance),
+                distance=normalized_distance,
                 response_text=metadata.get("response_text"),
                 company=_safe_str(metadata.get("company")),
                 source=_safe_str(metadata.get("source")),
@@ -62,6 +64,7 @@ def retrieve_similar_tickets(query: str, top_k: int = 5) -> list[RetrievedTicket
                 "response_text": ticket.response_text,
                 "company": ticket.company,
                 "score": ticket.score,
+                "distance": ticket.distance,
                 "created_at": ticket.created_at,
                 "customer_tweet_id": ticket.customer_tweet_id,
                 "company_response_id": ticket.company_response_id,
@@ -88,8 +91,8 @@ def generate_rag_answer(message: str, retrieved_tickets: list[RetrievedTicket]) 
         )
         return fallback
 
-    top_score = retrieved_tickets[0].score
-    if top_score < WEAK_RETRIEVAL_THRESHOLD:
+    top_distance = retrieved_tickets[0].distance
+    if top_distance is not None and top_distance > WEAK_RETRIEVAL_DISTANCE_THRESHOLD:
         fallback = (
             "I'm not confident the retrieved examples are close enough to answer this reliably."
         )
@@ -97,8 +100,8 @@ def generate_rag_answer(message: str, retrieved_tickets: list[RetrievedTicket]) 
             "rag_fallback_used",
             query=message,
             reason="weak_retrieval",
-            top_score=top_score,
-            threshold=WEAK_RETRIEVAL_THRESHOLD,
+            top_distance=top_distance,
+            threshold=WEAK_RETRIEVAL_DISTANCE_THRESHOLD,
             fallback=fallback,
         )
         return fallback
@@ -112,6 +115,7 @@ def generate_rag_answer(message: str, retrieved_tickets: list[RetrievedTicket]) 
                     f"Customer issue: {ticket.text}",
                     f"Company response: {ticket.response_text or ''}",
                     f"Company: {ticket.company or ''}",
+                    f"Distance (lower is better): {ticket.distance:.4f}" if ticket.distance is not None else "Distance (lower is better): unavailable",
                     f"Similarity score (0 to 1, higher is better): {ticket.score:.2f}",
                 ]
             )
@@ -127,12 +131,18 @@ def _first_or_empty(value: Any) -> list[Any]:
     return value[0]
 
 
-def _distance_to_score(distance: Any) -> float:
+def _normalize_distance(distance: Any) -> float | None:
     try:
         numeric_distance = float(distance)
     except (TypeError, ValueError):
+        return None
+    return round(max(0.0, numeric_distance), 4)
+
+
+def _distance_to_score(distance: float | None) -> float:
+    if distance is None:
         return 0.0
-    return round(min(1.0, max(0.0, 1.0 - numeric_distance)), 4)
+    return round(min(1.0, max(0.0, 1.0 - distance)), 4)
 
 
 def _safe_str(value: Any) -> str | None:

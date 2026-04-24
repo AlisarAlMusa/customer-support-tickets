@@ -9,6 +9,7 @@ class RetrieveRequest(BaseModel):
 class RetrievedTicket(BaseModel):
     text: str
     score: float
+    distance: float | None = None
     response_text: str | None = None
     company: str | None = None
     source: str | None = None

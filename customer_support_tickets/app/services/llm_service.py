@@ -38,6 +38,8 @@ def generate_rag_grounded_answer(message: str, retrieved_context: str) -> str:
         "to answer the user's message. Be concise, actionable, and grounded in the "
         "retrieved context. The retrieval quality has already been checked before this step, "
         "so focus on giving the best grounded answer you can from the provided examples. "
+        "Do not reply with generic uncertainty like 'Not sure' when the context contains relevant signals. "
+        "Instead, synthesize the closest examples into the most helpful answer you can. "
         "If the examples do not fully solve the issue, say what they suggest and be transparent "
         "about the limit.\n\nRetrieved context:\n"
         f"{retrieved_context}"
